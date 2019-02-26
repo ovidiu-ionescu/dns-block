@@ -1,9 +1,13 @@
 use memmap::MmapOptions;
 use std::fs::File;
 use std::str;
+use std::env;
 
 fn main() {
-  let file = File::open("domains.blocked").expect("Failed to open file");
+  let args: Vec<String> = env::args().collect();
+  let filename = &args[1];
+
+  let file = File::open(filename).expect("Failed to open file");
   let mmap = unsafe { MmapOptions::new().map(&file).expect("Failed to memmap file") };
   
   // assert_eq!(b"14933616", &mmap[0..8]);
