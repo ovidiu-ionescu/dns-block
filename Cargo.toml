@@ -1,0 +1,8 @@
+[package]
+name = "dns-block"
+version = "0.1.0"
+authors = ["Ovidiu Ionescu <ovidiu@ionescu.net>"]
+edition = "2018"
+
+[dependencies]
+memmap = "0.7.0"
