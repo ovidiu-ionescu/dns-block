@@ -3,22 +3,23 @@ use std::fs::File;
 use std::str;
 use std::env;
 
-fn main() {
-  let args: Vec<String> = env::args().collect();
-  let filename = &args[1];
-
-  let file = File::open(filename).expect("Failed to open file");
-  let mmap = unsafe { MmapOptions::new().map(&file).expect("Failed to memmap file") };
-  
-  // assert_eq!(b"14933616", &mmap[0..8]);
-
-  let entire_file = unsafe { str::from_utf8_unchecked(&mmap) };
+use std::collections::HashMap;
 
   #[derive(Debug,PartialEq)]
   enum LinePosition {
     LineStart,
     LineEnd
   }
+
+fn main() {
+  let args: Vec<String> = env::args().collect();
+  let filename = &args[1];
+
+  let file = File::open(filename).expect("Failed to open file");
+  let mmap = unsafe { MmapOptions::new().map(&file).expect("Failed to memmap file") };
+
+  let entire_file = unsafe { str::from_utf8_unchecked(&mmap) };
+
 
   let mut status = LinePosition::LineEnd;
   let mut start = 0;
@@ -33,6 +34,7 @@ fn main() {
           status = LinePosition::LineEnd;
           if i > start + 1 {
             end = i;
+            process_line(&entire_file[start..end]);
           }
         }
       },
@@ -45,9 +47,25 @@ fn main() {
       }
     }
   }
+  if end < start {
+    process_line(&entire_file[start..]);
+  }
   println!("Stats: characters {}, lines {}", count, line_count);
 
 
   // println!("From file {}", &tot_fisierul[1..10]);
   // println!("Hello, world!");
+}
+
+fn process_line(line: &str) {
+  for item in line.split('.').rev() {
+    print!("{};", item);
+  }
+  println!(" = {}", line);
+}
+
+struct HashToHash<'a>(HashMap<&'a str, HashToHash<'a>>);
+
+struct DomainIndex<'a> {
+  map: HashToHash<'a>
 }
