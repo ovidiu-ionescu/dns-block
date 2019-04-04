@@ -4,6 +4,9 @@ use std::str;
 use std::env;
 
 use std::collections::HashMap;
+use std::collections::HashSet;
+
+mod sub_domains;
 
   #[derive(Debug,PartialEq)]
   enum LinePosition {
@@ -24,15 +27,17 @@ fn main() {
 
   let mut domain_index = HashToHash(HashMap::new());
 
+  let mut blacklist: HashSet<&str> = HashSet::new();
+
   for line in entire_file.lines() {
-    // process_line(line);
-    add_domain(&mut domain_index, line);
+    process_line(line, &mut blacklist);
+    //add_domain(&mut domain_index, line);
 
   }
 
 }
 
-fn process_line(line: &str) {
+fn _process_line(line: &str) {
   if line.len() < 1 {
     return
   }
@@ -55,4 +60,23 @@ fn add_domain<'b>(domain_index: &mut HashToHash<'b>, line: &'b str) {
 
   }
   println!(" = {}", line);
+}
+
+fn process_line<'a>(line: &'a str, index: &mut HashSet<&'a str>) {
+  if let Some(s) = line.split_whitespace().next() {
+    for (i, c) in s.char_indices().rev() {
+      if '.' == c || 0 == i {
+        let seg;
+        if '.' == c {
+          seg = &s[i + 1..];
+        } else {
+          seg = s;
+        }
+        if !index.contains(seg) {
+          index.insert(s);
+          break;
+        }
+      }
+    }
+  }
 }
