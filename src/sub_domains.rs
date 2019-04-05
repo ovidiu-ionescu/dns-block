@@ -5,7 +5,7 @@ pub struct SubDomains<'a> {
 }
 
 impl <'a> SubDomains<'a> {
-    fn new(iter: &str) -> SubDomains {
+    pub fn new(iter: &str) -> SubDomains {
       SubDomains{ front_offset: iter.len(), iter }
     }
 }
