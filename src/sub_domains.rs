@@ -38,3 +38,24 @@ fn test_normal_domain() {
   assert_eq!("fb.com", subdomains.next().unwrap());
   assert_eq!("ads.fb.com", subdomains.next().unwrap());
 }
+
+pub fn count_char_occurences(line: &str, chr: char) -> usize {
+  let mut count: usize = 0;
+  for c in line.chars() {
+    if chr == c {
+      count += 1;
+    }
+  }
+  count
+}
+
+pub struct Domain<'a> {
+  pub name: &'a str,
+  pub dots: usize
+}
+
+impl <'a> Domain<'a> {
+  pub fn new(name: &str) -> Domain {
+    Domain{ name, dots: count_char_occurences(name, '.') }
+  }
+} 

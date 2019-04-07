@@ -7,6 +7,7 @@ use std::io::{BufWriter, Write};
 
 mod sub_domains;
 mod dns_resolver;
+use sub_domains::{ count_char_occurences, Domain };
 
 fn main() {
   let args: Vec<String> = env::args().collect();
@@ -29,20 +30,53 @@ fn main() {
 
   let mut extra_whitelist = Vec::new();
 
-  // fetch the other domains to whitelist
+  // println!("fetch the other domains to whitelist");
   dns_resolver::resolve_domain(&active_whitelist, &mut extra_whitelist);
   for line in &extra_whitelist {
     let domain = &line[.. line.len() - 1];
     process_whitelist_line(domain, &mut whitelist, None);
   }
 
+  // domains to blacklist should be processed from shortest
+  // to longest
+
+  // println!("calculate max number of lines");
+  let total = count_char_occurences(&domain_block_string, '\n') + count_char_occurences(&hosts_blocked_string, '\n');
+  // println!("allocate a vector to fit all {} lines", total);
+  let mut bad_domains: Vec<Domain> = Vec::with_capacity(total);
+  
+  // println!("put all lines in the vector");
   for line in hosts_blocked_string.lines() {
-    process_line(line, &mut blacklist, &whitelist);
+      if let Some(s) = line.split_whitespace().next() {
+        if !ignore_line(s) {
+          bad_domains.push(Domain::new(s));
+        }
+      }
   }
 
   for line in domain_block_string.lines() {
-    process_line(line, &mut blacklist, &whitelist);
+      if let Some(s) = line.split_whitespace().next() {
+        if !ignore_line(s) {
+          bad_domains.push(Domain::new(s));
+        }
+      }
   }
+  // println!("sort the vector, less dots first");
+  bad_domains.sort_unstable_by_key(|d:&Domain| d.dots);
+
+  // println!("add all baddies to the index");
+  for domain in &bad_domains {
+    process_bad_domain(domain.name, &mut blacklist, &whitelist);
+  }
+  // println!("Done processing");
+
+  // for line in hosts_blocked_string.lines() {
+  //   process_line(line, &mut blacklist, &whitelist);
+  // }
+
+  // for line in domain_block_string.lines() {
+  //   process_line(line, &mut blacklist, &whitelist);
+  // }
 
   write_output(&blacklist);
 }
@@ -76,6 +110,20 @@ fn process_line<'a>(line: &'a str, index: &mut HashSet<&'a str>, whitelist: &Has
     }
   }
 }
+
+fn process_bad_domain<'a>(domain: &'a str, index: &mut HashSet<&'a str>, whitelist: &HashSet<&'a str>) {
+  let mut seg_num = 0;
+    for seg in sub_domains::SubDomains::new(domain) {
+        if index.contains(seg) {
+          return;
+        }
+        seg_num += 1;
+    }
+    if seg_num > 1 && !whitelist.contains(domain) {
+      index.insert(domain); 
+    }
+}
+
 
 fn write_output(index: &HashSet<&str>) {
   let mut f = BufWriter::new(fs::File::create("simple.blocked").unwrap());
