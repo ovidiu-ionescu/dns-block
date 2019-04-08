@@ -1,6 +1,7 @@
 use std::env;
 
-use std::collections::HashSet;
+//use std::collections::HashSet;
+use fnv::FnvHashSet as HashSet;
 
 use std::fs;
 use std::io::{BufWriter, Write};
@@ -19,8 +20,8 @@ fn main() {
   let whitelist_string = fs::read_to_string(whitelist_filename).unwrap();
   let hosts_blocked_string = fs::read_to_string(hosts_blocked_filename).unwrap();
 
-  let mut blacklist: HashSet<&str> = HashSet::new();
-  let mut whitelist: HashSet<&str> = HashSet::new();
+  let mut blacklist: HashSet<&str> = HashSet::default();
+  let mut whitelist: HashSet<&str> = HashSet::default();
 
   let mut active_whitelist = Vec::with_capacity(50);
 
@@ -126,7 +127,7 @@ fn process_bad_domain<'a>(domain: &'a str, index: &mut HashSet<&'a str>, whiteli
 
 
 fn write_output(index: &HashSet<&str>) {
-  let mut f = BufWriter::new(fs::File::create("simple.blocked").unwrap());
+  let mut f = BufWriter::with_capacity(8*1024, fs::File::create("simple.blocked").unwrap());
   let eol: [u8; 1] = [10];
   for d in index.iter() {
     f.write(&*d.as_bytes()).unwrap();
