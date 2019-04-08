@@ -41,6 +41,7 @@ for domain in domains {
   all_futures.push(client.query(Name::from_str(domain).unwrap(), DNSClass::IN, RecordType::A));
 }
 
+:q
 // turn all futures into one big one
 let mega_future = join_all(all_futures);
 
