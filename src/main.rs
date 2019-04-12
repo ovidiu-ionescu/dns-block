@@ -109,7 +109,7 @@ fn main() {
 fn process_whitelist_line<'a>(line: &'a str, index: &mut HashSet<&'a str>) {
   if let Some(s) = line.split_whitespace().next() {
     if !ignore_line(s) {
-      for seg in sub_domains::SubDomains::new(s) {
+      for seg in sub_domains::SubDomains::new(s, 0) {
         index.insert(seg);
       }
     }
@@ -122,7 +122,7 @@ fn process_bad_domain<'a>(
   whitelist: &HashSet<&'a str>,
 ) {
   let mut seg_num = 0;
-  for seg in sub_domains::SubDomains::new(domain) {
+  for seg in sub_domains::SubDomains::new(domain, 1) {
     if index.contains(seg) {
       return;
     }
@@ -171,10 +171,3 @@ fn expand_whitelist(whitelist_string: String) -> (String, Vec<String>) {
   (whitelist_string, cnames)
 }
 
-fn expand_whitelist_async(whitelist_string: String) -> (String, Vec<String>) {
-  let(tx, rx) = mpsc::channel();
-  thread::spawn(move || {
-     tx.send(expand_whitelist(whitelist_string)).unwrap();
-  });
-  rx.recv().unwrap()
-}
