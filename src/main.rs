@@ -11,7 +11,7 @@ use std::sync::mpsc;
 
 mod dns_resolver;
 mod sub_domains;
-use sub_domains::{count_char_occurences, Domain};
+use sub_domains::{count_char_occurences, count_char_occurences_and_lowercase, Domain};
 
 use std::time::{Instant};
 
@@ -32,11 +32,12 @@ fn main() {
   });
 
 
-  let domain_block_string = fs::read_to_string(domain_block_filename).unwrap();
+  let mut domain_block_string = fs::read_to_string(domain_block_filename).unwrap();
   let hosts_blocked_string = fs::read_to_string(hosts_blocked_filename).unwrap();
 
   let mut blacklist: HashSet<&str> = HashSet::default();
 
+  domain_block_string.make_ascii_lowercase();
 
   // domains to blacklist should be processed from shortest
   // to longest
@@ -45,26 +46,33 @@ fn main() {
   // println!("calculate max number of lines");
   let total = count_char_occurences(&domain_block_string, '\n')
     + count_char_occurences(&hosts_blocked_string, '\n');
+
   // println!("allocate a vector to fit all {} lines", total);
   let mut bad_domains: Vec<Domain> = Vec::with_capacity(total);
 
-  // println!("put all lines in the vector");
+  // println!("put all lines from the personal block list in the vector");
   for line in hosts_blocked_string.lines() {
     if let Some(s) = line.split_whitespace().next() {
       if !ignore_line(s) {
-        bad_domains.push(Domain::new(s));
+        let domain = Domain::new(s);
+        bad_domains.push(domain);
       }
     }
   }
 
+  // println!("put all lines from the public block list in the vector");
   for line in domain_block_string.lines() {
-    if let Some(s) = line.split_whitespace().next() {
+    if let Some(s) = line.split_whitespace().next().as_mut() {
       if !ignore_line(s) {
-        bad_domains.push(Domain::new(s));
+        let domain = Domain::new(s);
+        if domain.dots > 0 {
+          bad_domains.push(domain);
+        }
       }
     }
   }
   // println!("sort the vector, less dots first");
+  let start_sorting_code = start.elapsed().as_millis();
   bad_domains.sort_unstable_by_key(|d: &Domain| d.dots);
   let end_sorting = start.elapsed().as_millis();
 
@@ -90,18 +98,11 @@ fn main() {
   }
   // println!("Done processing");
 
-  // for line in hosts_blocked_string.lines() {
-  //   process_line(line, &mut blacklist, &whitelist);
-  // }
-
-  // for line in domain_block_string.lines() {
-  //   process_line(line, &mut blacklist, &whitelist);
-  // }
   let start_writing = start.elapsed().as_millis();
   write_output(&blacklist);
 
-  println!("sorting: {}, until after sort: {}, processing baddies: {}", 
-    end_sorting - start_sorting, start_baddies, start_writing - start_baddies);
+  println!("sorting: {}, sorting core: {}, until after sort: {}, processing baddies: {}", 
+    end_sorting - start_sorting, end_sorting - start_sorting_code, start_baddies, start_writing - start_baddies);
 }
 
 /// Adds a non comment line to the whitelist index
@@ -109,9 +110,10 @@ fn main() {
 fn process_whitelist_line<'a>(line: &'a str, index: &mut HashSet<&'a str>) {
   if let Some(s) = line.split_whitespace().next() {
     if !ignore_line(s) {
-      for seg in sub_domains::SubDomains::new(s, 0) {
+      for seg in sub_domain_iterator(s, 1) {
         index.insert(seg);
       }
+      index.insert(s);
     }
   }
 }
@@ -121,14 +123,16 @@ fn process_bad_domain<'a>(
   index: &mut HashSet<&'a str>,
   whitelist: &HashSet<&'a str>,
 ) {
-  let mut seg_num = 0;
-  for seg in sub_domains::SubDomains::new(domain, 1) {
+  if domain.is_empty() {
+    return;
+  }
+  for seg in sub_domain_iterator(domain, 1) {
+    
     if index.contains(seg) {
       return;
     }
-    seg_num += 1;
   }
-  if seg_num > 1 && !whitelist.contains(domain) {
+  if !whitelist.contains(domain) {
     index.insert(domain);
   }
 }
@@ -169,5 +173,20 @@ fn expand_whitelist(whitelist_string: String) -> (String, Vec<String>) {
   let mut cnames = Vec::with_capacity(50);
   dns_resolver::resolve_domain(&explicit_whitelisted_domains, &mut cnames);
   (whitelist_string, cnames)
+}
+
+fn sub_domain_iterator<'a>(domain: &'a str, min: usize) -> impl Iterator<Item = &'a str> {
+  domain.char_indices().rev()
+    .filter(|(_i, c)| *c == '.')
+    .skip(min)
+    .map(move |(i, _c)| &domain[i + 1 ..])
+}
+
+#[test]
+fn sub_domain_iterator_test() {
+  let mut subdomains = sub_domain_iterator("many.ads.fb.com", 1);
+  assert_eq!("fb.com", subdomains.next().unwrap());
+  assert_eq!("ads.fb.com", subdomains.next().unwrap());
+  assert_eq!(None, subdomains.next());
 }
 
