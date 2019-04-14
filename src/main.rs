@@ -15,6 +15,8 @@ use sub_domains::{count_char_occurences, Domain};
 
 use std::time::{Instant};
 
+use rayon::join;
+
 fn main() {
   let start = Instant::now();
 
@@ -91,16 +93,14 @@ fn main() {
   }
 
   let start_baddies = start.elapsed().as_millis();
-  // println!("add all baddies to the index");
-  let mut blacklist: HashSet<&str> = HashSet::with_capacity_and_hasher(bad_domains.len() / 2, Default::default());
 
-  for domain in &bad_domains {
-    process_bad_domain(domain.name, &mut blacklist, &whitelist);
-  }
-  // println!("Done processing");
+  let (blacklist_com, blacklist_net) = join(
+    || process_baddies(&bad_domains, &whitelist, |s: &str| s.ends_with("com")),
+    || process_baddies(&bad_domains, &whitelist, |s: &str| !s.ends_with("com"))
+  ); 
 
   let start_writing = start.elapsed().as_millis();
-  write_output(&blacklist);
+  write_output(&blacklist_com, &blacklist_net);
 
   println!("sorting: {}, sorting core: {}, until after sort: {}, processing baddies: {}", 
     end_sorting - start_sorting, end_sorting - start_sorting_code, start_baddies, start_writing - start_baddies);
@@ -138,10 +138,14 @@ fn process_bad_domain<'a>(
   }
 }
 
-fn write_output(index: & HashSet<&str>) {
+fn write_output(index_com: & HashSet<&str>, index_net: & HashSet<&str>) {
   let mut f = BufWriter::with_capacity(8 * 1024, fs::File::create("simple.blocked").unwrap());
   let eol: [u8; 1] = [10];
-  for d in index.iter() {
+  for d in index_com.iter() {
+    f.write(&*d.as_bytes()).unwrap();
+    f.write(&eol).unwrap();
+  }
+  for d in index_net.iter() {
     f.write(&*d.as_bytes()).unwrap();
     f.write(&eol).unwrap();
   }
@@ -191,3 +195,11 @@ fn sub_domain_iterator_test() {
   assert_eq!(None, subdomains.next());
 }
 
+fn process_baddies<'a>(bad_domains: &'a Vec<Domain>, whitelist: &HashSet<&'a str>, filter_d: fn(&str) -> bool) ->HashSet<&'a str> {
+    let mut blacklist: HashSet<&str> = HashSet::with_capacity_and_hasher(bad_domains.len() / 2, Default::default());
+
+  for domain in bad_domains.iter().filter(|d| filter_d(d.name)) {
+    process_bad_domain(domain.name, &mut blacklist, &whitelist);
+  }
+  blacklist
+}
