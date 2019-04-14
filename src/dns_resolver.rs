@@ -2,16 +2,12 @@ extern crate trust_dns;
 extern crate tokio;
 extern crate futures;
 
-use std::net::{Ipv4Addr, SocketAddr};
 use std::str::FromStr;
 use tokio::runtime::current_thread::Runtime;
 
 use trust_dns::udp::UdpClientStream;
-use trust_dns::client::{Client, ClientFuture, ClientHandle};
-use trust_dns::rr::{DNSClass, Name, RData, Record, RecordType};
-
-use trust_dns::op::ResponseCode;
-use trust_dns::rr::rdata::key::KEY;
+use trust_dns::client::{ClientFuture, ClientHandle};
+use trust_dns::rr::{DNSClass, Name, RData, RecordType};
 
 use futures::future::join_all;
 

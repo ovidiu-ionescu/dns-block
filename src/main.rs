@@ -11,7 +11,7 @@ use std::sync::mpsc;
 
 mod dns_resolver;
 mod sub_domains;
-use sub_domains::{count_char_occurences, count_char_occurences_and_lowercase, Domain};
+use sub_domains::{count_char_occurences, Domain};
 
 use std::time::{Instant};
 
@@ -35,8 +35,7 @@ fn main() {
   let mut domain_block_string = fs::read_to_string(domain_block_filename).unwrap();
   let hosts_blocked_string = fs::read_to_string(hosts_blocked_filename).unwrap();
 
-  let mut blacklist: HashSet<&str> = HashSet::default();
-
+  
   domain_block_string.make_ascii_lowercase();
 
   // domains to blacklist should be processed from shortest
@@ -93,6 +92,8 @@ fn main() {
 
   let start_baddies = start.elapsed().as_millis();
   // println!("add all baddies to the index");
+  let mut blacklist: HashSet<&str> = HashSet::with_capacity_and_hasher(bad_domains.len() / 2, Default::default());
+
   for domain in &bad_domains {
     process_bad_domain(domain.name, &mut blacklist, &whitelist);
   }
