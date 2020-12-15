@@ -87,8 +87,7 @@ fn main() {
     process_whitelist_line(line, &mut whitelist);
   }
 
-  for line in &cnames {
-    let domain = &line[..line.len() - 1];
+  for domain in &cnames {
     process_whitelist_line(domain, &mut whitelist);
   }
 
@@ -138,6 +137,15 @@ fn process_bad_domain<'a>(
   }
 }
 
+fn is_domain_blocked(domain: &str, index: &HashSet<&str>) -> bool {
+  for seg in sub_domain_iterator(domain, 1) { 
+    if index.contains(seg) {
+      return true;
+    }
+  }
+  false
+}
+
 fn write_output(index_com: & HashSet<&str>, index_net: & HashSet<&str>) {
   let mut f = BufWriter::with_capacity(8 * 1024, fs::File::create("simple.blocked").unwrap());
   let eol: [u8; 1] = [10];
@@ -177,6 +185,11 @@ fn expand_whitelist(whitelist_string: String) -> (String, Vec<String>) {
   }
   let mut cnames = Vec::with_capacity(50);
   dns_resolver::resolve_domain(&explicit_whitelisted_domains, &mut cnames);
+  /* only for debug
+  for domain in &cnames {
+    println!("{}", domain);
+  }
+  */
   (whitelist_string, cnames)
 }
 

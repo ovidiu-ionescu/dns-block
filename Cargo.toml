@@ -1,13 +1,9 @@
 [package]
 name = "dns-block"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Ovidiu Ionescu <ovidiu@ionescu.net>"]
 edition = "2018"
 
 [dependencies]
-memmap = "0.7.0"
-trust-dns = { version = "0.15", default-features = false }
-tokio = "*"
-futures = "*"
 fnv = "*"
 rayon = "*"
