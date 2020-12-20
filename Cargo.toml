@@ -1,9 +1,12 @@
 [package]
 name = "dns-block"
-version = "0.1.1"
+version = "0.2.0"
 authors = ["Ovidiu Ionescu <ovidiu@ionescu.net>"]
 edition = "2018"
 
 [dependencies]
 fnv = "*"
 rayon = "*"
+clap="*"
+log="*"
+stderrlog="*"

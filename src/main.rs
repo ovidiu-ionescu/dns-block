@@ -11,19 +11,48 @@ use std::sync::mpsc;
 
 mod dns_resolver;
 mod sub_domains;
-use sub_domains::{count_char_occurences, Domain};
+use sub_domains::{count_char_occurences, Domain, sub_domain_iterator};
+mod filter;
 
 use std::time::{Instant};
 
 use rayon::join;
 
+use clap::{clap_app, crate_version};
+use log::*;
+
 fn main() {
+  let command_line_params = clap_app!(
+    ("dns-block") => 
+    (version: crate_version!())
+    (author: "Ovidiu Ionescu <ovidiu@ionescu.net>")
+    (about: "Simplify the list of ad and tracker servers")
+    (@arg debug: -d +multiple "Set debug level debug information")
+    (@arg filter: -f --filter "act as filter on stdin")
+    (@arg bind: -b --bind "output in Bind format")
+    (@arg ("domains.blocked"): +required "File containing the list of servers to block")
+    (@arg ("domains.whitelisted"): +required "File containing the list of servers to whitelist")
+    (@arg ("hosts_blocked.txt"): +required "Additional personal file with domains to block")
+    (@arg ("output_file"): default_value("simple.blocked") "Output file")
+).get_matches();
+
+  let log_level = command_line_params.occurrences_of("debug") as usize;
+  stderrlog::new()
+  .module(module_path!())
+  .quiet(false)
+  .verbosity(log_level)
+  .timestamp(stderrlog::Timestamp::Off)
+  .init()
+  .unwrap();
+
+  trace!("{:#?}", command_line_params);
+
   let start = Instant::now();
 
-  let args: Vec<String> = env::args().collect();
-  let domain_block_filename = &args[1];
-  let whitelist_filename = &args[2];
-  let hosts_blocked_filename = &args[3];
+  let domain_block_filename = command_line_params.value_of("domains.blocked").unwrap();
+  let whitelist_filename = command_line_params.value_of("domains.whitelisted").unwrap();
+  let hosts_blocked_filename = command_line_params.value_of("hosts_blocked.txt").unwrap();
+  let output_file = command_line_params.value_of("output_file").unwrap();
 
   let whitelist_string = fs::read_to_string(whitelist_filename).unwrap();
 
@@ -98,11 +127,19 @@ fn main() {
     || process_baddies(&bad_domains, &whitelist, |s: &str| !s.ends_with("com"))
   ); 
 
-  let start_writing = start.elapsed().as_millis();
-  write_output(&blacklist_com, &blacklist_net);
+  if command_line_params.is_present("filter") {
+    filter::filter(&blacklist_com, &blacklist_net).unwrap();
+  } else {
+    let start_writing = start.elapsed().as_millis();
+    if command_line_params.is_present("bind") {
+      write_bind_output(&blacklist_com, &blacklist_net, output_file);
+    } else {
+      write_output(&blacklist_com, &blacklist_net, output_file);
+    }
 
-  println!("sorting: {}, sorting core: {}, until after sort: {}, processing baddies: {}", 
-    end_sorting - start_sorting, end_sorting - start_sorting_code, start_baddies, start_writing - start_baddies);
+    debug!("sorting: {}, sorting core: {}, until after sort: {}, processing baddies: {}", 
+      end_sorting - start_sorting, end_sorting - start_sorting_code, start_baddies, start_writing - start_baddies);
+  }
 }
 
 /// Adds a non comment line to the whitelist index
@@ -137,17 +174,8 @@ fn process_bad_domain<'a>(
   }
 }
 
-fn is_domain_blocked(domain: &str, index: &HashSet<&str>) -> bool {
-  for seg in sub_domain_iterator(domain, 1) { 
-    if index.contains(seg) {
-      return true;
-    }
-  }
-  false
-}
-
-fn write_output(index_com: & HashSet<&str>, index_net: & HashSet<&str>) {
-  let mut f = BufWriter::with_capacity(8 * 1024, fs::File::create("simple.blocked").unwrap());
+fn write_output(index_com: & HashSet<&str>, index_net: & HashSet<&str>, output_file: &str) {
+  let mut f = BufWriter::with_capacity(8 * 1024, fs::File::create(output_file).unwrap());
   let eol: [u8; 1] = [10];
   for d in index_com.iter() {
     f.write(&*d.as_bytes()).unwrap();
@@ -157,6 +185,42 @@ fn write_output(index_com: & HashSet<&str>, index_net: & HashSet<&str>) {
     f.write(&*d.as_bytes()).unwrap();
     f.write(&eol).unwrap();
   }
+  f.flush().unwrap();
+}
+
+fn write_bind_output(index_com: & HashSet<&str>, index_net: & HashSet<&str>, output_file: &str) {
+  let preamble =
+r#"$TTL 60
+@   IN    SOA  localhost. root.localhost.  (
+        2   ; serial 
+        3H  ; refresh 
+        1H  ; retry 
+        1W  ; expiry 
+        1H) ; minimum 
+    IN    NS    localhost.
+"#;
+  let prefix = "*.";
+  let suffix = " CNAME .";
+  let mut f = BufWriter::with_capacity(8 * 1024, fs::File::create(output_file).unwrap());
+  
+  f.write(&preamble.as_bytes()).unwrap();
+
+  let eol: [u8; 1] = [10];
+  let mut serialize_index = | index: &HashSet<&str> | {
+    for d in index.iter() {
+      f.write(&*d.as_bytes()).unwrap();
+      f.write(&suffix.as_bytes()).unwrap();
+      f.write(&eol).unwrap();
+
+      f.write(&prefix.as_bytes()).unwrap();
+      f.write(&*d.as_bytes()).unwrap();
+      f.write(&suffix.as_bytes()).unwrap();
+      f.write(&eol).unwrap();
+    }
+  };
+  serialize_index(index_com);
+  serialize_index(index_net);
+
   f.flush().unwrap();
 }
 
@@ -184,28 +248,14 @@ fn expand_whitelist(whitelist_string: String) -> (String, Vec<String>) {
     }
   }
   let mut cnames = Vec::with_capacity(50);
-  dns_resolver::resolve_domain(&explicit_whitelisted_domains, &mut cnames);
+  dns_resolver::resolve_domain(&explicit_whitelisted_domains, &mut cnames).unwrap();
+  info!("Cnames to be whitelisted");
   /* only for debug
   for domain in &cnames {
     println!("{}", domain);
   }
   */
   (whitelist_string, cnames)
-}
-
-fn sub_domain_iterator<'a>(domain: &'a str, min: usize) -> impl Iterator<Item = &'a str> {
-  domain.char_indices().rev()
-    .filter(|(_i, c)| *c == '.')
-    .skip(min)
-    .map(move |(i, _c)| &domain[i + 1 ..])
-}
-
-#[test]
-fn sub_domain_iterator_test() {
-  let mut subdomains = sub_domain_iterator("many.ads.fb.com", 1);
-  assert_eq!("fb.com", subdomains.next().unwrap());
-  assert_eq!("ads.fb.com", subdomains.next().unwrap());
-  assert_eq!(None, subdomains.next());
 }
 
 fn process_baddies<'a>(bad_domains: &'a Vec<Domain>, whitelist: &HashSet<&'a str>, filter_d: fn(&str) -> bool) ->HashSet<&'a str> {
