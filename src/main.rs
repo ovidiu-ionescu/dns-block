@@ -20,6 +20,7 @@ use rayon::join;
 
 use clap::{clap_app, crate_version};
 use log::*;
+use indoc::indoc;
 
 fn main() {
   let command_line_params = clap_app!(
@@ -189,16 +190,16 @@ fn write_output(index_com: & HashSet<&str>, index_net: & HashSet<&str>, output_f
 }
 
 fn write_bind_output(index_com: & HashSet<&str>, index_net: & HashSet<&str>, output_file: &str) {
-  let preamble =
-r#"$TTL 60
-@   IN    SOA  localhost. root.localhost.  (
-        2   ; serial 
-        3H  ; refresh 
-        1H  ; retry 
-        1W  ; expiry 
-        1H) ; minimum 
-    IN    NS    localhost.
-"#;
+  let preamble = indoc! {"
+    $TTL 60
+    @   IN    SOA  localhost. root.localhost.  (
+            2   ; serial 
+            3H  ; refresh 
+            1H  ; retry 
+            1W  ; expiry 
+            1H) ; minimum 
+        IN    NS    localhost.
+    "};
   let prefix = "*.";
   let suffix = " CNAME .";
   let mut f = BufWriter::with_capacity(8 * 1024, fs::File::create(output_file).unwrap());
