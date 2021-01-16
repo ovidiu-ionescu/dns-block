@@ -196,9 +196,4 @@ c058 link to akamai
         assert_eq!(2, super::compute_url_length(&BUF, 33));
         assert_eq!(17, super::compute_url_length(&BUF, 88));
     }
-
-    #[test]
-    fn test_extract_data() {
-        super::extract_data(&BUF);
-    }
 }

@@ -129,9 +129,9 @@ fn main() {
     || process_baddies(&bad_domains, &whitelist, |s: &str| s.ends_with("com")),
     || process_baddies(&bad_domains, &whitelist, |s: &str| !s.ends_with("com"))
   ); 
-  info!(".com {:#?}", &statistics_com);
-  info!(".net {:#?}", &statistics_net);
-  info!("total {:#?}", Statistics::aggregate(&statistics_com, &statistics_net));
+  info!("Statistics .com \n{}", &statistics_com);
+  info!("Statistics .net \n{}", &statistics_net);
+  info!("Statistics total \n{}", Statistics::aggregate(&statistics_com, &statistics_net));
 
   if command_line_params.is_present("filter") {
     filter::filter(&blacklist_com, &blacklist_net).unwrap();
