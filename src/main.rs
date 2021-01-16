@@ -69,7 +69,7 @@ fn main() {
   let mut domain_block_string = fs::read_to_string(domain_block_filename).unwrap();
   let hosts_blocked_string = fs::read_to_string(hosts_blocked_filename).unwrap();
 
-  
+  // converting to lowercase might generate some duplicates
   domain_block_string.make_ascii_lowercase();
 
   // domains to blacklist should be processed from shortest
@@ -104,6 +104,7 @@ fn main() {
       }
     }
   }
+
   // println!("sort the vector, less dots first");
   let start_sorting_code = start.elapsed().as_millis();
   bad_domains.sort_unstable_by_key(|d: &Domain| d.dots);
