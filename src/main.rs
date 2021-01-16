@@ -85,23 +85,15 @@ fn main() {
 
   // println!("put all lines from the personal block list in the vector");
   for line in hosts_blocked_string.lines() {
-    if let Some(s) = line.split_whitespace().next() {
-      if !ignore_line(s) {
-        let domain = Domain::new(s);
+    if let Some(domain) = Domain::new(line) {
         bad_domains.push(domain);
-      }
     }
   }
 
   // println!("put all lines from the public block list in the vector");
   for line in domain_block_string.lines() {
-    if let Some(s) = line.split_whitespace().next().as_mut() {
-      if !ignore_line(s) {
-        let domain = Domain::new(s);
-        if domain.dots > 0 {
-          bad_domains.push(domain);
-        }
-      }
+    if let Some(domain) = Domain::new(line) {
+        bad_domains.push(domain);
     }
   }
 
@@ -150,16 +142,14 @@ fn main() {
 }
 
 /// Adds a non comment line to the whitelist index
-/// Optionally it can add the domain to the list with the actual domains
+/// It adds the domain and all parent domains
 fn process_whitelist_line<'a>(line: &'a str, index: &mut HashSet<&'a str>) {
-  if let Some(s) = line.split_whitespace().next() {
-    if !ignore_line(s) {
-      for seg in sub_domain_iterator(s, 1) {
+  if let Some(domain) = Domain::new(line) {
+      for seg in sub_domain_iterator(domain.name, 1) {
         index.insert(seg);
       }
-      index.insert(s);
-    }
-  }
+      index.insert(domain.name);
+   }
 }
 
 /// adds a domain to the blocked index if it's not already blocked already or whitelisted
@@ -168,6 +158,7 @@ fn process_bad_domain<'a>(
   index: &mut HashSet<&'a str>,
   whitelist: &HashSet<&'a str>,
   statistics: &mut Statistics,
+  whitelisted: &mut HashSet<&'a str>, 
 ) {
   if domain.is_empty() {
     return;
@@ -185,6 +176,10 @@ fn process_bad_domain<'a>(
       statistics.increment_duplicate();
     }
   } else {
+    if whitelisted.insert(domain) {
+      statistics.increment_distinct_whitelisted();
+    }
+    debug!("Whitelisted {}", domain);
     statistics.increment_whitelisted();
   }
 }
@@ -239,27 +234,14 @@ fn write_bind_output(index_com: & HashSet<&str>, index_net: & HashSet<&str>, out
   f.flush().unwrap();
 }
 
-/// Checks if a line is empty or a comment
-fn ignore_line(line: &str) -> bool {
-  if line.is_empty() {
-    return true;
-  }
-  if '#' == line.chars().next().unwrap() {
-    return true;
-  }
-  false
-}
-
 // expand the whitelisted domains with their cnames
 fn expand_whitelist(whitelist_string: String) -> (String, Vec<String>) {
   // println!("fetch the other domains to whitelist");
 
   let mut explicit_whitelisted_domains = Vec::with_capacity(50);
   for line in whitelist_string.lines() {
-    if let Some(s) = line.split_whitespace().next() {
-      if !ignore_line(s) {
-          explicit_whitelisted_domains.push(s);
-        }
+    if let Some(domain) = Domain::new(line) {
+      explicit_whitelisted_domains.push(domain.name);
     }
   }
   let mut cnames = Vec::with_capacity(50);
@@ -276,10 +258,11 @@ fn process_baddies<'a>(
   filter_d: fn(&str) -> bool) -> (HashSet<&'a str>, Statistics) {
 
   let mut blacklist: HashSet<&str> = HashSet::with_capacity_and_hasher(bad_domains.len() / 2, Default::default());
+  let mut whitelisted: HashSet<&str> = HashSet::with_capacity_and_hasher(whitelist.len(), Default::default());
   let mut statistics = Statistics::new();
 
   for domain in bad_domains.iter().filter(|d| filter_d(d.name)) {
-    process_bad_domain(domain.name, &mut blacklist, &whitelist, &mut statistics);
+    process_bad_domain(domain.name, &mut blacklist, &whitelist, &mut statistics, &mut whitelisted);
   }
   (blacklist, statistics)
 }
