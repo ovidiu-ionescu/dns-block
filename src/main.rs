@@ -13,6 +13,8 @@ mod dns_resolver;
 mod sub_domains;
 use sub_domains::{count_char_occurences, Domain, sub_domain_iterator};
 mod filter;
+mod statistics;
+use statistics::Statistics;
 
 use std::time::{Instant};
 
@@ -123,10 +125,13 @@ fn main() {
 
   let start_baddies = start.elapsed().as_millis();
 
-  let (blacklist_com, blacklist_net) = join(
+  let ((blacklist_com, statistics_com), (blacklist_net, statistics_net)) = join (
     || process_baddies(&bad_domains, &whitelist, |s: &str| s.ends_with("com")),
     || process_baddies(&bad_domains, &whitelist, |s: &str| !s.ends_with("com"))
   ); 
+  info!(".com {:#?}", &statistics_com);
+  info!(".net {:#?}", &statistics_net);
+  info!("total {:#?}", Statistics::aggregate(&statistics_com, &statistics_net));
 
   if command_line_params.is_present("filter") {
     filter::filter(&blacklist_com, &blacklist_net).unwrap();
@@ -156,22 +161,30 @@ fn process_whitelist_line<'a>(line: &'a str, index: &mut HashSet<&'a str>) {
   }
 }
 
+/// adds a domain to the blocked index if it's not already blocked already or whitelisted
 fn process_bad_domain<'a>(
   domain: &'a str,
   index: &mut HashSet<&'a str>,
   whitelist: &HashSet<&'a str>,
+  statistics: &mut Statistics,
 ) {
   if domain.is_empty() {
     return;
   }
   for seg in sub_domain_iterator(domain, 1) {
-    
     if index.contains(seg) {
+      statistics.increment_parent();
       return;
     }
   }
   if !whitelist.contains(domain) {
-    index.insert(domain);
+    if index.insert(domain) {
+      statistics.increment_blocked();
+    } else {
+      statistics.increment_duplicate();
+    }
+  } else {
+    statistics.increment_whitelisted();
   }
 }
 
@@ -250,20 +263,22 @@ fn expand_whitelist(whitelist_string: String) -> (String, Vec<String>) {
   }
   let mut cnames = Vec::with_capacity(50);
   dns_resolver::resolve_domain(&explicit_whitelisted_domains, &mut cnames).unwrap();
-  info!("Cnames to be whitelisted");
-  /* only for debug
-  for domain in &cnames {
-    println!("{}", domain);
-  }
-  */
+  debug!("Cnames to be whitelisted: {:#?}", cnames);
   (whitelist_string, cnames)
 }
 
-fn process_baddies<'a>(bad_domains: &'a Vec<Domain>, whitelist: &HashSet<&'a str>, filter_d: fn(&str) -> bool) ->HashSet<&'a str> {
-    let mut blacklist: HashSet<&str> = HashSet::with_capacity_and_hasher(bad_domains.len() / 2, Default::default());
+/// Makes an index from a list of domains to block
+/// filter selects a subset of domains to process, e.g. .com ones
+fn process_baddies<'a>(
+  bad_domains: &'a Vec<Domain>, 
+  whitelist: &HashSet<&'a str>, 
+  filter_d: fn(&str) -> bool) -> (HashSet<&'a str>, Statistics) {
+
+  let mut blacklist: HashSet<&str> = HashSet::with_capacity_and_hasher(bad_domains.len() / 2, Default::default());
+  let mut statistics = Statistics::new();
 
   for domain in bad_domains.iter().filter(|d| filter_d(d.name)) {
-    process_bad_domain(domain.name, &mut blacklist, &whitelist);
+    process_bad_domain(domain.name, &mut blacklist, &whitelist, &mut statistics);
   }
-  blacklist
+  (blacklist, statistics)
 }
