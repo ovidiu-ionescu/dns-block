@@ -11,11 +11,14 @@ pub struct Domain<'a> {
 impl <'a> Domain<'a> {
   pub fn new(line: &str) -> Option<Domain> {
     let comment_stripped = match line.find('#') {
-        Some(idx) => &line[0 .. idx],
-        None => line
+      Some(idx) => &line[0 .. idx],
+      None => line
     }.trim();
     if let Some(name) = comment_stripped.split_whitespace().rev().next() {
-      return Some(Domain{ name, dots: count_char_occurences(name, '.') })
+      let dots = count_char_occurences(name, '.');
+      if dots > 0 {
+        return Some(Domain{ name, dots })
+      }
     }
     None
   }
@@ -38,11 +41,17 @@ fn sub_domain_iterator_test() {
 
 #[test]
 fn domain_constructor_test() {
-  let od = Domain::new("# just a comment");
-  assert!(od.is_none());
 
-  let od = Domain::new("   # just a comment");
-  assert!(od.is_none());
+  let nd = vec![
+    "# just a comment",
+    "   # just a comment",
+    "localhost",
+  ];
+
+  for line in &nd {
+    let od = Domain::new(line);
+    assert!(od.is_none());
+  }
 
   let v = vec![
     "domain.com",
