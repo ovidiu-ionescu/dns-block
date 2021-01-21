@@ -1,4 +1,4 @@
-
+use log::*;
 use std::io::{ self, Write };
 use fnv::FnvHashSet as HashSet;
 use crate::sub_domains::{ sub_domain_iterator };
@@ -31,11 +31,17 @@ fn extract<'a>(line: &'a str, pref: &str, suf: &str) -> Option<&'a str> {
         None
 }
 
-pub fn filter(blacklist_com: &HashSet<&str>, blacklist_net: &HashSet<&str>) -> io::Result<()> {
+pub fn filter(blacklist_com: &HashSet<&str>, blacklist_net: &HashSet<&str>, filter_parameter: Option<&str>) -> io::Result<()> {
+    debug!("Filter for client ips: {:#?}", filter_parameter);
     let mut input = String::new();
 
     let stdout = io::stdout();
     let mut handle = stdout.lock();
+
+    let ip_filter: HashSet<&str> = match filter_parameter {
+        Some(filter) => filter.split(",").collect::<HashSet<&str>>(),
+        None => HashSet::with_capacity_and_hasher(0, Default::default())
+    };
 
     loop {
         let n = io::stdin().read_line(&mut input)?;
@@ -47,10 +53,12 @@ pub fn filter(blacklist_com: &HashSet<&str>, blacklist_net: &HashSet<&str>) -> i
         if domain_opt.is_some() && client_opt.is_some() {
             let domain = domain_opt.unwrap();
             let client = client_opt.unwrap();
-            if !is_domain_blocked(domain, blacklist_com, &blacklist_net) {
-                handle.write_all(input.as_bytes())?;
-            } else {
-                handle.write_fmt(format_args!("{} {} {}\n", &client, &domain, "blocked"))?;
+            if ip_filter.is_empty() || ip_filter.contains(&client) {
+                if !is_domain_blocked(domain, blacklist_com, &blacklist_net) {
+                    handle.write_all(input.as_bytes())?;
+                } else {
+                    handle.write_fmt(format_args!("{} {} {}\n", &client, &domain, "blocked"))?;
+                }
             }
         }
         

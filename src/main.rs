@@ -31,11 +31,12 @@ fn main() {
     (author: "Ovidiu Ionescu <ovidiu@ionescu.net>")
     (about: "Simplify the list of ad and tracker servers")
     (@arg debug: -d +multiple "Set debug level debug information")
-    (@arg filter: -f --filter "act as filter on stdin")
+    (@arg pipe: -p --pipe "act as pipe on stdin")
+    (@arg filter: -f --filter +takes_value "when running as a pipe filter for just this client ip")
     (@arg bind: -b --bind "output in Bind format")
     (@arg ("domains.blocked"): +required "File containing the list of servers to block")
-    (@arg ("domains.whitelisted"): +required "File containing the list of servers to whitelist")
-    (@arg ("hosts_blocked.txt"): +required "Additional personal file with domains to block")
+    (@arg ("domains.whitelisted"): +required "File containing the list of servers to whitelist, - to ignore")
+    (@arg ("hosts_blocked.txt"): +required "Additional personal file with domains to block, - to ignore")
     (@arg ("output_file"): default_value("simple.blocked") "Output file")
 ).get_matches();
 
@@ -57,7 +58,10 @@ fn main() {
   let hosts_blocked_filename = command_line_params.value_of("hosts_blocked.txt").unwrap();
   let output_file = command_line_params.value_of("output_file").unwrap();
 
-  let whitelist_string = fs::read_to_string(whitelist_filename).unwrap();
+  let whitelist_string = match whitelist_filename {
+    "-" => String::with_capacity(0),
+    _ => fs::read_to_string(whitelist_filename).unwrap(),
+  };
 
   // do the DNS requests while we read and sort the domains to block
   let(tx, rx) = mpsc::channel();
@@ -67,7 +71,11 @@ fn main() {
 
 
   let mut domain_block_string = fs::read_to_string(domain_block_filename).unwrap();
-  let hosts_blocked_string = fs::read_to_string(hosts_blocked_filename).unwrap();
+
+  let hosts_blocked_string = match hosts_blocked_filename {
+    "-" => String::with_capacity(0),
+    _ => fs::read_to_string(hosts_blocked_filename).unwrap(),
+  };
 
   // converting to lowercase might generate some duplicates
   domain_block_string.make_ascii_lowercase();
@@ -126,8 +134,9 @@ fn main() {
   info!("Statistics .net \n{}", &statistics_net);
   info!("Statistics total \n{}", Statistics::aggregate(&statistics_com, &statistics_net));
 
-  if command_line_params.is_present("filter") {
-    filter::filter(&blacklist_com, &blacklist_net).unwrap();
+  if command_line_params.is_present("pipe") {
+    
+    filter::filter(&blacklist_com, &blacklist_net, command_line_params.value_of("filter")).unwrap();
   } else {
     let start_writing = start.elapsed().as_millis();
     if command_line_params.is_present("bind") {
