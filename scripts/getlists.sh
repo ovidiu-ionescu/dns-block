@@ -1,6 +1,6 @@
 #!/bin/bash
 # Fetches lists of servers to block. Initially the list was the same as used by PiHole
-set -x
+# set -x
 
 # break on errors
 set -e
@@ -77,6 +77,6 @@ fetch_list_of_lists list_of_lists.txt
 fetch_list_of_lists own_list_of_lists.txt
 
 if [[ ! "${DEBUG}" == "debug" ]]; then
-  ./dns-block -dd $OUT domains.whitelisted hosts_blocked.txt domains.blocked
-  ./dns-block -dd --bind $OUT domains.whitelisted hosts_blocked.txt rpz.db
+  ./dns-block -dd $OUT domains.whitelisted hosts_blocked.txt pack domains.blocked
+  ./dns-block $OUT domains.whitelisted hosts_blocked.txt pack --bind rpz.db
 fi

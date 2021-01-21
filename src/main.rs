@@ -25,6 +25,13 @@ use log::*;
 use indoc::indoc;
 
 fn main() {
+  let file_exists = |path| {
+    if "-" == path || std::fs::metadata(path).is_ok() {
+        Ok(())
+    } else {
+        Err(String::from("File doesn't exist"))
+    }
+  };
   let command_line_params = clap_app!(
     ("dns-block") => 
     (@setting SubcommandRequiredElseHelp)
@@ -32,9 +39,9 @@ fn main() {
     (author: "Ovidiu Ionescu <ovidiu@ionescu.net>")
     (about: "Simplify the list of ad and tracker servers")
     (@arg debug: -d +multiple "Set debug level debug information")
-    (@arg ("domains.blocked"): +required "File containing the list of servers to block")
-    (@arg ("domains.whitelisted"): +required "File containing the list of servers to whitelist, - to ignore")
-    (@arg ("hosts_blocked.txt"): +required "Additional personal file with domains to block, - to ignore")
+    (@arg ("domains.blocked"): +required {file_exists} "File containing the list of servers to block")
+    (@arg ("domains.whitelisted"): +required {file_exists} "File containing the list of servers to whitelist, - to ignore")
+    (@arg ("hosts_blocked.txt"): +required {file_exists} "Additional personal file with domains to block, - to ignore")
     (@subcommand pack =>
       (about: "Pack the domains list into one")
       (@arg bind: -b --bind "output in Bind format")
