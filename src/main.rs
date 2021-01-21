@@ -27,17 +27,24 @@ use indoc::indoc;
 fn main() {
   let command_line_params = clap_app!(
     ("dns-block") => 
+    (@setting SubcommandRequiredElseHelp)
     (version: crate_version!())
     (author: "Ovidiu Ionescu <ovidiu@ionescu.net>")
     (about: "Simplify the list of ad and tracker servers")
     (@arg debug: -d +multiple "Set debug level debug information")
-    (@arg pipe: -p --pipe "act as pipe on stdin")
-    (@arg filter: -f --filter +takes_value "when running as a pipe filter for just this client ip")
-    (@arg bind: -b --bind "output in Bind format")
     (@arg ("domains.blocked"): +required "File containing the list of servers to block")
     (@arg ("domains.whitelisted"): +required "File containing the list of servers to whitelist, - to ignore")
     (@arg ("hosts_blocked.txt"): +required "Additional personal file with domains to block, - to ignore")
-    (@arg ("output_file"): default_value("simple.blocked") "Output file")
+    (@subcommand pack =>
+      (about: "Pack the domains list into one")
+      (@arg bind: -b --bind "output in Bind format")
+      (@arg ("output_file"): default_value("simple.blocked") "Output file")
+    )
+    (@subcommand pipe => 
+      (about: "act as a pipe when tailing the bind query log")
+      (@arg filter: -f --filter +takes_value "filter for just these client ips (comma separated list)")
+    )
+
 ).get_matches();
 
   let log_level = command_line_params.occurrences_of("debug") as usize;
@@ -56,7 +63,6 @@ fn main() {
   let domain_block_filename = command_line_params.value_of("domains.blocked").unwrap();
   let whitelist_filename = command_line_params.value_of("domains.whitelisted").unwrap();
   let hosts_blocked_filename = command_line_params.value_of("hosts_blocked.txt").unwrap();
-  let output_file = command_line_params.value_of("output_file").unwrap();
 
   let whitelist_string = match whitelist_filename {
     "-" => String::with_capacity(0),
@@ -134,19 +140,27 @@ fn main() {
   info!("Statistics .net \n{}", &statistics_net);
   info!("Statistics total \n{}", Statistics::aggregate(&statistics_com, &statistics_net));
 
-  if command_line_params.is_present("pipe") {
-    
-    filter::filter(&blacklist_com, &blacklist_net, command_line_params.value_of("filter")).unwrap();
-  } else {
-    let start_writing = start.elapsed().as_millis();
-    if command_line_params.is_present("bind") {
-      write_bind_output(&blacklist_com, &blacklist_net, output_file);
-    } else {
-      write_output(&blacklist_com, &blacklist_net, output_file);
-    }
+  match command_line_params.subcommand_name() {
+    Some("pipe") => {
+      let sub_params = command_line_params.subcommand_matches("pipe").unwrap();
+      filter::filter(&blacklist_com, &blacklist_net, sub_params.value_of("filter")).unwrap();
+    },
+    Some("pack") => {
+      let sub_params = command_line_params.subcommand_matches("pack").unwrap();
+      let output_file = sub_params.value_of("output_file").unwrap();
+      let start_writing = start.elapsed().as_millis();
+      if sub_params.is_present("bind") {
+        write_bind_output(&blacklist_com, &blacklist_net, output_file);
+      } else {
+        write_output(&blacklist_com, &blacklist_net, output_file);
+      }
 
-    debug!("sorting: {}, sorting core: {}, until after sort: {}, processing baddies: {}", 
-      end_sorting - start_sorting, end_sorting - start_sorting_code, start_baddies, start_writing - start_baddies);
+      debug!("sorting: {}, sorting core: {}, until after sort: {}, processing baddies: {}", 
+        end_sorting - start_sorting, end_sorting - start_sorting_code, start_baddies, start_writing - start_baddies);
+    },
+    _ => {
+      // shoulld never get here, there should aways be a subcommand
+    },
   }
 }
 
