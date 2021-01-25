@@ -39,7 +39,7 @@ pub fn filter(blacklist_com: &HashSet<&str>, blacklist_net: &HashSet<&str>, filt
     let mut handle = stdout.lock();
 
     let ip_filter: HashSet<&str> = match filter_parameter {
-        Some(filter) => filter.split(",").collect::<HashSet<&str>>(),
+        Some(filter) => filter.split(',').collect::<HashSet<&str>>(),
         None => HashSet::with_capacity_and_hasher(0, Default::default())
     };
 
@@ -50,9 +50,7 @@ pub fn filter(blacklist_com: &HashSet<&str>, blacklist_net: &HashSet<&str>, filt
         }
         let domain_opt = extract(&input, "query: ", " ");
         let client_opt  = extract(&input, "client ", "#");
-        if domain_opt.is_some() && client_opt.is_some() {
-            let domain = domain_opt.unwrap();
-            let client = client_opt.unwrap();
+        if let (Some(domain), Some(client)) = (domain_opt, client_opt) {
             if ip_filter.is_empty() || ip_filter.contains(&client) {
                 if !is_domain_blocked(domain, blacklist_com, &blacklist_net) {
                     handle.write_all(input.as_bytes())?;

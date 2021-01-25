@@ -24,7 +24,7 @@ impl <'a> Domain<'a> {
   }
 }
 
-pub fn sub_domain_iterator<'a>(domain: &'a str, min: usize) -> impl Iterator<Item = &'a str> {
+pub fn sub_domain_iterator(domain: & str, min: usize) -> impl Iterator<Item = & str> {
   domain.char_indices().rev()
     .filter(|(_i, c)| *c == '.')
     .skip(min)

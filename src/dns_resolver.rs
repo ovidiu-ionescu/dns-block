@@ -32,7 +32,7 @@ fn extract_name(buf: &[u8], start: usize) -> String {
 
 fn create_request(domain: &str, id: u16) -> Vec<u8> {
     let size = 12 + domain.len() + 2 + 4;
-    let mut header: Vec<u8> = Vec::with_capacity(size);
+    let mut header: Vec<u8> = vec![0; size];
     header.resize(size, 0);
     write(id, &mut header, 0);
     header[2] = 1; 
@@ -90,7 +90,7 @@ fn compute_url_length(buf: &[u8], start: usize) -> usize {
     }
 } 
 
-pub fn resolve_domain(domains_str: &Vec<&str>, result: &mut Vec<String>) -> std::io::Result<()> {
+pub fn resolve_domain(domains_str: &[&str], result: &mut Vec<String>) -> std::io::Result<()> {
     let socket = UdpSocket::bind("0.0.0.0:6913").expect("couldn't bind to address");
     socket.connect("8.8.8.8:53").expect("connect function failed");
 

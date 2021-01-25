@@ -218,12 +218,12 @@ fn write_output(index_com: & HashSet<&str>, index_net: & HashSet<&str>, output_f
   let mut f = BufWriter::with_capacity(8 * 1024, fs::File::create(output_file).unwrap());
   let eol: [u8; 1] = [10];
   for d in index_com.iter() {
-    f.write(&*d.as_bytes()).unwrap();
-    f.write(&eol).unwrap();
+    f.write_all(&*d.as_bytes()).unwrap();
+    f.write_all(&eol).unwrap();
   }
   for d in index_net.iter() {
-    f.write(&*d.as_bytes()).unwrap();
-    f.write(&eol).unwrap();
+    f.write_all(&*d.as_bytes()).unwrap();
+    f.write_all(&eol).unwrap();
   }
   f.flush().unwrap();
 }
@@ -243,19 +243,19 @@ fn write_bind_output(index_com: & HashSet<&str>, index_net: & HashSet<&str>, out
   let suffix = " CNAME .";
   let mut f = BufWriter::with_capacity(8 * 1024, fs::File::create(output_file).unwrap());
   
-  f.write(&preamble.as_bytes()).unwrap();
+  f.write_all(&preamble.as_bytes()).unwrap();
 
   let eol: [u8; 1] = [10];
   let mut serialize_index = | index: &HashSet<&str> | {
     for d in index.iter() {
-      f.write(&*d.as_bytes()).unwrap();
-      f.write(&suffix.as_bytes()).unwrap();
-      f.write(&eol).unwrap();
+      f.write_all(&*d.as_bytes()).unwrap();
+      f.write_all(&suffix.as_bytes()).unwrap();
+      f.write_all(&eol).unwrap();
 
-      f.write(&prefix.as_bytes()).unwrap();
-      f.write(&*d.as_bytes()).unwrap();
-      f.write(&suffix.as_bytes()).unwrap();
-      f.write(&eol).unwrap();
+      f.write_all(&prefix.as_bytes()).unwrap();
+      f.write_all(&*d.as_bytes()).unwrap();
+      f.write_all(&suffix.as_bytes()).unwrap();
+      f.write_all(&eol).unwrap();
     }
   };
   serialize_index(index_com);
@@ -283,7 +283,7 @@ fn expand_whitelist(whitelist_string: String) -> (String, Vec<String>) {
 /// Makes an index from a list of domains to block
 /// filter selects a subset of domains to process, e.g. .com ones
 fn process_baddies<'a>(
-  bad_domains: &'a Vec<Domain>, 
+  bad_domains: &'a [Domain], 
   whitelist: &HashSet<&'a str>, 
   filter_d: fn(&str) -> bool) -> (HashSet<&'a str>, Statistics) {
 
