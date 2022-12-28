@@ -11,3 +11,8 @@ clap= { version = "*", features = ["derive"] }
 log="*"
 stderrlog="*"
 indoc="1.0"
+mimalloc = "*"
+
+[profile.release]
+lto = true
+

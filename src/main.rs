@@ -22,10 +22,25 @@ use rayon::join;
 use indoc::indoc;
 use log::*;
 
+use mimalloc::MiMalloc;
+
 use crate::cli::Commands;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() {
     let command_line_params = cli::get_cli();
+
+    stderrlog::new()
+        .module(module_path!())
+        .quiet(false)
+        .verbosity(command_line_params.debug as usize)
+        .timestamp(stderrlog::Timestamp::Off)
+        .init()
+        .unwrap();
+
+    trace!("args: {:?}", command_line_params);
 
     let start = Instant::now();
 
@@ -38,7 +53,7 @@ fn main() {
         _ => fs::read_to_string(whitelist_filename).unwrap(),
     };
 
-    // do the DNS requests while we read and sort the domains to block
+    debug!("Do the DNS requests for whitelisted domains while we read and sort the domains we want to block");
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         tx.send(expand_whitelist(whitelist_string)).unwrap();
@@ -123,13 +138,15 @@ fn main() {
                 write_output(&blacklist_com, &blacklist_net, &output_file);
             }
 
-            debug!(
-                "sorting: {}, sorting core: {}, until after sort: {}, processing baddies: {}",
-                end_sorting - start_sorting,
-                end_sorting - start_sorting_code,
-                start_baddies,
-                start_writing - start_baddies
-            );
+            if command_line_params.timing {
+                info!(
+                    "sorting: {}, sorting core: {}, until after sort: {}, processing baddies: {}",
+                    end_sorting - start_sorting,
+                    end_sorting - start_sorting_code,
+                    start_baddies,
+                    start_writing - start_baddies
+                );
+            }
         }
     }
 }

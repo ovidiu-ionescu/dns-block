@@ -1,6 +1,8 @@
 use std::net::UdpSocket;
 use std::thread;
 
+use log::*;
+
 fn write(n: u16, vec: &mut [u8], index: usize) {
     let be = n.to_be_bytes();
     vec[index] = be[0];
@@ -67,12 +69,22 @@ fn extract_data(buf: &[u8], result: &mut Vec<String>) {
     // compute question length
     let question_length = compute_url_length(buf, 12) + 4;
     let answer_count = read(buf, 6);
+    if answer_count == 0 {
+        warn!("No DNS resolution found for 「{}」", extract_name(buf, 12));
+        return;
+    } else {
+        debug!(
+            "Found {} answers for 「{}」",
+            answer_count,
+            extract_name(buf, 12)
+        );
+    }
     let mut answer_start = 12 + question_length;
     for _x in 0..answer_count {
         let url_length = compute_url_length(buf, answer_start);
         if 5 == read(buf, answer_start + url_length) {
             let cname = extract_name(buf, answer_start + url_length + 10);
-            //println!("{}", &cname);
+            trace!("Found CNAME: 「{}」", &cname);
             result.push(cname);
         }
         answer_start += url_length + 10 + read(buf, answer_start + url_length + 8);
@@ -115,11 +127,11 @@ pub fn resolve_domain(domains_str: &[&str], result: &mut Vec<String>) -> std::io
         }
     });
 
-    // the requests have been sent, now we deal with the answers
+    debug!("The DNS requests have been sent, now we deal with the answers");
 
     let mut resp = [0; 512];
     for _x in 0..domain_count {
-        //println!("Waiting for domain {}", _x);
+        debug!("Waiting for DNS answer {}", _x);
         let received = socket.recv(&mut resp)?;
         //fs::write("answer.bin", &resp[0 ..received])?;
 

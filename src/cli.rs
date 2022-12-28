@@ -1,12 +1,15 @@
 use clap::{Parser, Subcommand};
-use log::*;
 
 #[derive(Parser, Debug)]
 #[command(name = "dns-block", author, version, about, long_about)]
 pub struct Cli {
     /// log level, dddd for trace, ddd for debug, dd for info, d for warn, default is info
     #[arg(short, long, action = clap::ArgAction::Count)]
-    debug: u8,
+    pub debug: u8,
+
+    /// display timing information at the end of processing
+    #[arg(short, long)]
+    pub timing: bool,
 
     /// File containing the list of domains to dns block.
     #[arg(name = "domains.blocked", value_parser = file_exists)]
@@ -45,16 +48,6 @@ pub enum Commands {
 
 pub fn get_cli() -> Cli {
     let args = Cli::parse();
-
-    stderrlog::new()
-        .module(module_path!())
-        .quiet(false)
-        .verbosity(args.debug as usize)
-        .timestamp(stderrlog::Timestamp::Off)
-        .init()
-        .unwrap();
-
-    trace!("args: {:?}", args);
 
     args
 }
