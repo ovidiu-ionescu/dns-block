@@ -1,7 +1,7 @@
 use std::net::UdpSocket;
 use std::thread;
 
-fn write(n: u16, vec: &mut Vec<u8>, index: usize) {
+fn write(n: u16, vec: &mut [u8], index: usize) {
     let be = n.to_be_bytes();
     vec[index] = be[0];
     vec[index + 1] = be[1];

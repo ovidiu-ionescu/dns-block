@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 fnv = "*"
 rayon = "*"
-clap="*"
+clap= { version = "*", features = ["derive"] }
 log="*"
 stderrlog="*"
 indoc="1.0"
