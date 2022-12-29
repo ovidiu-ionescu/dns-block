@@ -1,8 +1,8 @@
 [package]
 name = "dns-block"
-version = "0.4.3"
+version = "0.5.0"
 authors = ["Ovidiu Ionescu <ovidiu@ionescu.net>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 fnv = "*"
