@@ -40,7 +40,7 @@ fn main() {
         .init()
         .unwrap();
 
-    trace!("args: {:?}", command_line_params);
+    trace!("{:#?}", command_line_params);
 
     let start = Instant::now();
 
