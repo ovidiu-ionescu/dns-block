@@ -70,7 +70,10 @@ fn extract_data(buf: &[u8], result: &mut Vec<String>) {
     let question_length = compute_url_length(buf, 12) + 4;
     let answer_count = read(buf, 6);
     if answer_count == 0 {
-        warn!("No DNS resolution found for 「{}」", extract_name(buf, 12));
+        warn!(
+            "No DNS resolution found for 「{}」, whitelisting it has no effect",
+            extract_name(buf, 12)
+        );
         return;
     } else {
         debug!(
