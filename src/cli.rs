@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 #[derive(Parser, Debug)]
 #[command(name = "dns-block", author, version, about, long_about)]
 pub struct Cli {
-    /// log level, dddd for trace, ddd for debug, dd for info, d for warn, default is info
+    /// log level, dddd for trace, ddd for debug, dd for info, d for warn, default no output
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub debug: u8,
 
