@@ -1,13 +1,19 @@
 [package]
 name = "dns-block"
-version = "0.4.3"
+version = "0.5.0"
 authors = ["Ovidiu Ionescu <ovidiu@ionescu.net>"]
-edition = "2018"
+edition = "2021"
+description = "Simplify the list of ad and tracking servers to block"
 
 [dependencies]
 fnv = "*"
 rayon = "*"
-clap="*"
+clap= { version = "*", features = ["derive"] }
 log="*"
 stderrlog="*"
 indoc="1.0"
+mimalloc = "*"
+
+[profile.release]
+lto = true
+

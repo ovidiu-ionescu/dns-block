@@ -1,5 +1,3 @@
-use std::env;
-
 //use std::collections::HashSet;
 use fnv::FnvHashSet as HashSet;
 
@@ -9,6 +7,7 @@ use std::io::{BufWriter, Write};
 use std::sync::mpsc;
 use std::thread;
 
+mod cli;
 mod dns_resolver;
 mod sub_domains;
 use sub_domains::{count_char_occurences, sub_domain_iterator, Domain};
@@ -20,45 +19,23 @@ use std::time::Instant;
 
 use rayon::join;
 
-use clap::{clap_app, crate_version};
 use indoc::indoc;
 use log::*;
 
+use mimalloc::MiMalloc;
+
+use crate::cli::Commands;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+
 fn main() {
-    let file_exists = |path| {
-        if "-" == path || std::fs::metadata(path).is_ok() {
-            Ok(())
-        } else {
-            Err(String::from("File doesn't exist"))
-        }
-    };
-    let command_line_params = clap_app!(
-    ("dns-block") => 
-    (@setting SubcommandRequiredElseHelp)
-    (version: crate_version!())
-    (author: "Ovidiu Ionescu <ovidiu@ionescu.net>")
-    (about: "Simplify the list of ad and tracker servers")
-    (@arg debug: -d +multiple "Set debug level debug information")
-    (@arg ("domains.blocked"): +required {file_exists} "File containing the list of servers to block")
-    (@arg ("domains.whitelisted"): +required {file_exists} "File containing the list of servers to whitelist, - to ignore")
-    (@arg ("hosts_blocked.txt"): +required {file_exists} "Additional personal file with domains to block, - to ignore")
-    (@subcommand pack =>
-      (about: "Pack the domains list into one")
-      (@arg bind: -b --bind "output in Bind format")
-      (@arg ("output_file"): default_value("simple.blocked") "Output file")
-    )
-    (@subcommand pipe =>
-      (about: "act as a pipe when tailing the bind query log")
-      (@arg filter: -f --filter +takes_value "filter for just these client ips (comma separated list)")
-    )
+    let command_line_params = cli::get_cli();
 
-).get_matches();
-
-    let log_level = command_line_params.occurrences_of("debug") as usize;
     stderrlog::new()
         .module(module_path!())
         .quiet(false)
-        .verbosity(log_level)
+        .verbosity(command_line_params.debug as usize)
         .timestamp(stderrlog::Timestamp::Off)
         .init()
         .unwrap();
@@ -67,16 +44,16 @@ fn main() {
 
     let start = Instant::now();
 
-    let domain_block_filename = command_line_params.value_of("domains.blocked").unwrap();
-    let whitelist_filename = command_line_params.value_of("domains.whitelisted").unwrap();
-    let hosts_blocked_filename = command_line_params.value_of("hosts_blocked.txt").unwrap();
+    let domain_block_filename = command_line_params.domain_block_filename;
+    let whitelist_filename = command_line_params.domain_whitelist_filename;
+    let hosts_blocked_filename = command_line_params.hosts_blocked_filename;
 
-    let whitelist_string = match whitelist_filename {
+    let whitelist_string = match whitelist_filename.as_ref() {
         "-" => String::with_capacity(0),
         _ => fs::read_to_string(whitelist_filename).unwrap(),
     };
 
-    // do the DNS requests while we read and sort the domains to block
+    debug!("Do the DNS requests for whitelisted domains while we read and sort the domains we want to block");
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         tx.send(expand_whitelist(whitelist_string)).unwrap();
@@ -84,7 +61,7 @@ fn main() {
 
     let mut domain_block_string = fs::read_to_string(domain_block_filename).unwrap();
 
-    let hosts_blocked_string = match hosts_blocked_filename {
+    let hosts_blocked_string = match hosts_blocked_filename.as_ref() {
         "-" => String::with_capacity(0),
         _ => fs::read_to_string(hosts_blocked_filename).unwrap(),
     };
@@ -149,36 +126,27 @@ fn main() {
         Statistics::aggregate(&statistics_com, &statistics_net)
     );
 
-    match command_line_params.subcommand_name() {
-        Some("pipe") => {
-            let sub_params = command_line_params.subcommand_matches("pipe").unwrap();
-            filter::filter(
-                &blacklist_com,
-                &blacklist_net,
-                sub_params.value_of("filter"),
-            )
-            .unwrap();
+    match command_line_params.command {
+        Commands::Pipe { filter } => {
+            filter::filter(&blacklist_com, &blacklist_net, filter.as_deref()).unwrap();
         }
-        Some("pack") => {
-            let sub_params = command_line_params.subcommand_matches("pack").unwrap();
-            let output_file = sub_params.value_of("output_file").unwrap();
+        Commands::Pack { bind, output_file } => {
             let start_writing = start.elapsed().as_millis();
-            if sub_params.is_present("bind") {
-                write_bind_output(&blacklist_com, &blacklist_net, output_file);
+            if bind {
+                write_bind_output(&blacklist_com, &blacklist_net, &output_file);
             } else {
-                write_output(&blacklist_com, &blacklist_net, output_file);
+                write_output(&blacklist_com, &blacklist_net, &output_file);
             }
 
-            debug!(
-                "sorting: {}, sorting core: {}, until after sort: {}, processing baddies: {}",
-                end_sorting - start_sorting,
-                end_sorting - start_sorting_code,
-                start_baddies,
-                start_writing - start_baddies
-            );
-        }
-        _ => {
-            // should never get here, there should aways be a subcommand
+            if command_line_params.timing {
+                info!(
+                    "sorting: {}, sorting core: {}, until after sort: {}, processing baddies: {}",
+                    end_sorting - start_sorting,
+                    end_sorting - start_sorting_code,
+                    start_baddies,
+                    start_writing - start_baddies
+                );
+            }
         }
     }
 }
@@ -230,11 +198,11 @@ fn write_output(index_com: &HashSet<&str>, index_net: &HashSet<&str>, output_fil
     let mut f = BufWriter::with_capacity(8 * 1024, fs::File::create(output_file).unwrap());
     let eol: [u8; 1] = [10];
     for d in index_com.iter() {
-        f.write_all(&*d.as_bytes()).unwrap();
+        f.write_all(d.as_bytes()).unwrap();
         f.write_all(&eol).unwrap();
     }
     for d in index_net.iter() {
-        f.write_all(&*d.as_bytes()).unwrap();
+        f.write_all(d.as_bytes()).unwrap();
         f.write_all(&eol).unwrap();
     }
     f.flush().unwrap();
@@ -255,18 +223,18 @@ fn write_bind_output(index_com: &HashSet<&str>, index_net: &HashSet<&str>, outpu
     let suffix = " CNAME .";
     let mut f = BufWriter::with_capacity(8 * 1024, fs::File::create(output_file).unwrap());
 
-    f.write_all(&preamble.as_bytes()).unwrap();
+    f.write_all(preamble.as_bytes()).unwrap();
 
     let eol: [u8; 1] = [10];
     let mut serialize_index = |index: &HashSet<&str>| {
         for d in index.iter() {
-            f.write_all(&*d.as_bytes()).unwrap();
-            f.write_all(&suffix.as_bytes()).unwrap();
+            f.write_all(d.as_bytes()).unwrap();
+            f.write_all(suffix.as_bytes()).unwrap();
             f.write_all(&eol).unwrap();
 
-            f.write_all(&prefix.as_bytes()).unwrap();
-            f.write_all(&*d.as_bytes()).unwrap();
-            f.write_all(&suffix.as_bytes()).unwrap();
+            f.write_all(prefix.as_bytes()).unwrap();
+            f.write_all(d.as_bytes()).unwrap();
+            f.write_all(suffix.as_bytes()).unwrap();
             f.write_all(&eol).unwrap();
         }
     };
@@ -309,7 +277,7 @@ fn process_baddies<'a>(
         process_bad_domain(
             domain.name,
             &mut blacklist,
-            &whitelist,
+            whitelist,
             &mut statistics,
             &mut whitelisted,
         );

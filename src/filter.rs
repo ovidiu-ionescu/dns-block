@@ -60,7 +60,7 @@ pub fn filter(
         let client_opt = extract(&input, "client ", "#");
         if let (Some(domain), Some(client)) = (domain_opt, client_opt) {
             if ip_filter.is_empty() || ip_filter.contains(&client) {
-                if !is_domain_blocked(domain, blacklist_com, &blacklist_net) {
+                if !is_domain_blocked(domain, blacklist_com, blacklist_net) {
                     handle.write_all(input.as_bytes())?;
                 } else {
                     handle.write_fmt(format_args!("{} {} {}\n", &client, &domain, "blocked"))?;
