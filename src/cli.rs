@@ -47,9 +47,7 @@ pub enum Commands {
 }
 
 pub fn get_cli() -> Cli {
-    let args = Cli::parse();
-
-    args
+    Cli::parse()
 }
 
 fn file_exists(path: &str) -> Result<String, String> {
