@@ -9,13 +9,13 @@ pub struct Domain<'a> {
 }
 
 impl<'a> Domain<'a> {
-    pub fn new(line: &str) -> Option<Domain> {
+    pub fn new(line: &str) -> Option<Domain<'_>> {
         let comment_stripped = match line.find('#') {
             Some(idx) => &line[0..idx],
             None => line,
         }
         .trim();
-        if let Some(name) = comment_stripped.split_whitespace().rev().next() {
+        if let Some(name) = comment_stripped.split_whitespace().next_back() {
             let dots = count_char_occurences(name, '.');
             if dots > 0 {
                 return Some(Domain { name, dots });
