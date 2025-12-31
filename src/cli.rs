@@ -1,4 +1,6 @@
-use clap::{Parser, Subcommand};
+use std::{fs::metadata, path::PathBuf};
+
+use clap::{Parser, Subcommand, ValueHint};
 
 #[derive(Parser, Debug)]
 #[command(name = "dns-block", author, version, about, long_about)]
@@ -11,17 +13,12 @@ pub struct Args {
     #[arg(short, long)]
     pub timing: bool,
 
-    /// File containing the list of domains to dns block.
-    #[arg(name = "domains.blocked", value_parser = file_exists)]
-    pub domain_block_filename: String,
+    /// File containing a list of domains to dns block, multiple can be specified
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', value_hint = ValueHint::FilePath, value_parser = validate_readable_file)]
+    pub block_file: Option<Vec<PathBuf>>,
 
-    /// File containing the list of domains to whitelist. Use - to skip this parameter
-    #[arg(name = "domains.whitelist", value_parser = file_exists)]
-    pub domain_whitelist_filename: String,
-
-    /// Additional personal file with domains to block. Use - to skip this parameter
-    #[arg(name = "hosts_blocked.txt", value_parser = file_exists)]
-    pub hosts_blocked_filename: String,
+    #[arg(short, long, value_hint = ValueHint::FilePath, value_parser = validate_readable_file)]
+    pub allow_file: Option<PathBuf>,
 
     #[command(subcommand)]
     pub command: Commands,
@@ -50,10 +47,20 @@ pub fn get_args() -> Args {
     Args::parse()
 }
 
-fn file_exists(path: &str) -> Result<String, String> {
-    if "-" == path || std::fs::metadata(path).is_ok() {
-        Ok(path.to_string())
-    } else {
-        Err(format!("{path}: No such file or directory"))
+fn validate_readable_file(s: &str) -> Result<PathBuf, String> {
+    let path = PathBuf::from(s);
+    
+    // Check if path exists and is a file
+    let meta = metadata(&path).map_err(|_| format!("'{}' does not exist", s))?;
+    
+    if !meta.is_file() {
+        return Err(format!("'{}' is not a file", s));
     }
+
+    // Check if readable by attempting to open (optional but thorough)
+    if std::fs::File::open(&path).is_err() {
+        return Err(format!("'{}' is not readable (permission denied)", s));
+    }
+
+    Ok(path)
 }

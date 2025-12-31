@@ -1,7 +1,7 @@
 //use std::collections::HashSet;
 use fnv::FnvHashSet as HashSet;
 
-use std::fs;
+use std::fs::{self, read_to_string};
 use std::io::{BufWriter, Write};
 
 use std::sync::mpsc;
@@ -44,13 +44,9 @@ fn main() {
 
     let start = Instant::now();
 
-    let domain_block_filename = command_line_params.domain_block_filename;
-    let whitelist_filename = command_line_params.domain_whitelist_filename;
-    let hosts_blocked_filename = command_line_params.hosts_blocked_filename;
-
-    let whitelist_string = match whitelist_filename.as_ref() {
-        "-" => String::with_capacity(0),
-        _ => fs::read_to_string(whitelist_filename).unwrap(),
+    let whitelist_string = match command_line_params.allow_file {
+      Some(path) => fs::read_to_string(path).unwrap(),
+      _ => String::with_capacity(0),
     };
 
     debug!("Do the DNS requests for whitelisted domains while we read and sort the domains we want to block");
@@ -59,40 +55,33 @@ fn main() {
         tx.send(expand_whitelist(whitelist_string)).unwrap();
     });
 
-    let mut domain_block_string = fs::read_to_string(domain_block_filename).unwrap();
-
-    let hosts_blocked_string = match hosts_blocked_filename.as_ref() {
-        "-" => String::with_capacity(0),
-        _ => fs::read_to_string(hosts_blocked_filename).unwrap(),
-    };
-
-    // converting to lowercase might generate some duplicates
-    domain_block_string.make_ascii_lowercase();
-
     // domains to blacklist should be processed from shortest
     // to longest
 
     let start_sorting = start.elapsed().as_millis();
+
     // println!("calculate max number of lines");
-    let total = count_char_occurences(&domain_block_string, '\n')
-        + count_char_occurences(&hosts_blocked_string, '\n');
+    let mut total_line_count = 0;
+    let block_lists = match command_line_params.block_file {
+      Some(block_files) =>
+      block_files.iter().map(|path| {
+        let mut text = read_to_string(path).unwrap();
+        // converting to lowercase might generate some duplicates
+        text.make_ascii_lowercase();
+        total_line_count += count_char_occurences(&text, '\n');
+        text
+      }).collect(),
+      _ => Vec::new(),
 
-    // println!("allocate a vector to fit all {} lines", total);
-    let mut bad_domains: Vec<Domain> = Vec::with_capacity(total);
-
-    // println!("put all lines from the personal block list in the vector");
-    for line in hosts_blocked_string.lines() {
+    };
+    let mut bad_domains = Vec::with_capacity(total_line_count);
+    block_lists.iter().for_each(|text| {
+      for line in text.lines() {
         if let Some(domain) = Domain::new(line) {
             bad_domains.push(domain);
         }
-    }
-
-    // println!("put all lines from the public block list in the vector");
-    for line in domain_block_string.lines() {
-        if let Some(domain) = Domain::new(line) {
-            bad_domains.push(domain);
-        }
-    }
+      }
+    });
 
     // println!("sort the vector, less dots first");
     let start_sorting_code = start.elapsed().as_millis();
