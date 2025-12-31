@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 #[command(name = "dns-block", author, version, about, long_about)]
-pub struct Cli {
+pub struct Args {
     /// log level, dddd for trace, ddd for debug, dd for info, d for warn, default no output
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub debug: u8,
@@ -46,8 +46,8 @@ pub enum Commands {
     },
 }
 
-pub fn get_cli() -> Cli {
-    Cli::parse()
+pub fn get_args() -> Args {
+    Args::parse()
 }
 
 fn file_exists(path: &str) -> Result<String, String> {

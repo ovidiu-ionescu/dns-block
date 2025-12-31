@@ -24,13 +24,13 @@ use log::*;
 
 use mimalloc::MiMalloc;
 
-use crate::cli::Commands;
+use crate::cli::{Commands, get_args};
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
 fn main() {
-    let command_line_params = cli::get_cli();
+    let command_line_params = get_args();
 
     stderrlog::new()
         .module(module_path!())
