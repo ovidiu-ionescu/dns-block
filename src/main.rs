@@ -1,3 +1,4 @@
+use env_logger::Builder;
 //use std::collections::HashSet;
 use fnv::FnvHashSet as HashSet;
 
@@ -35,13 +36,7 @@ static GLOBAL: MiMalloc = MiMalloc;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
   let command_line_params = get_args();
 
-  stderrlog::new()
-    .module(module_path!())
-    .quiet(false)
-    .verbosity(command_line_params.debug as usize)
-    .timestamp(stderrlog::Timestamp::Off)
-    .init()
-    .unwrap();
+  setup_logging(command_line_params.debug);
 
   trace!("{:#?}", command_line_params);
 
@@ -290,4 +285,20 @@ fn process_baddies<'a>(
     process_bad_domain(domain.name, &mut blacklist, whitelist, &mut statistics, &mut whitelisted);
   }
   (blacklist, statistics)
+}
+
+fn setup_logging(level: u8) {
+  let level_filter = match level {
+    0 => LevelFilter::Error,
+    1 => LevelFilter::Warn,
+    2 => LevelFilter::Info,
+    3 => LevelFilter::Debug,
+    _ => LevelFilter::Trace,
+  };
+  let mut builder = Builder::from_default_env();
+  // if the RUST_LOG var is not defined we use the debug level
+  if std::env::var("RUST_LOG").is_err() {
+    builder.filter_level(level_filter);
+  }
+  builder.format_timestamp_secs().init();
 }
