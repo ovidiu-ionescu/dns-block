@@ -9,6 +9,7 @@ use std::thread;
 
 mod cli;
 mod dns_resolver;
+mod list_of_lists;
 mod sub_domains;
 use sub_domains::{count_char_occurences, sub_domain_iterator, Domain};
 mod filter;
@@ -25,11 +26,13 @@ use log::*;
 use mimalloc::MiMalloc;
 
 use crate::cli::{Commands, get_args};
+use crate::list_of_lists::fetch_lists;
 
 #[global_allocator]
 static GLOBAL: MiMalloc = MiMalloc;
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let command_line_params = get_args();
 
     stderrlog::new()
@@ -43,6 +46,8 @@ fn main() {
     trace!("{:#?}", command_line_params);
 
     let start = Instant::now();
+
+    let remote_lists = fetch_lists(command_line_params.lists_file).await;
 
     let whitelist_string = match command_line_params.allow_file {
       Some(path) => fs::read_to_string(path).unwrap(),
@@ -60,7 +65,8 @@ fn main() {
 
     let start_sorting = start.elapsed().as_millis();
 
-    // println!("calculate max number of lines");
+    // read the block files from disk
+    // also calculate max number of lines
     let mut total_line_count = 0;
     let block_lists = match command_line_params.block_file {
       Some(block_files) =>
@@ -72,13 +78,26 @@ fn main() {
         text
       }).collect(),
       _ => Vec::new(),
-
     };
+
+    // do the same for the lists of lists
     let mut bad_domains = Vec::with_capacity(total_line_count);
     block_lists.iter().for_each(|text| {
       for line in text.lines() {
         if let Some(domain) = Domain::new(line) {
             bad_domains.push(domain);
+        }
+      }
+    });
+
+    let remote_lists = remote_lists?;
+    remote_lists.iter().for_each(|fetch_result| {
+      if let Ok(text) = &fetch_result.text {
+        for line in text.lines() {
+        if let Some(domain) = Domain::new(line) {
+            bad_domains.push(domain);
+        }
+        
         }
       }
     });
@@ -138,6 +157,7 @@ fn main() {
             }
         }
     }
+    Ok(())
 }
 
 /// Adds a non comment line to the whitelist index

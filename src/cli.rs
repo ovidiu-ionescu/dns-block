@@ -13,6 +13,9 @@ pub struct Args {
     #[arg(short, long)]
     pub timing: bool,
 
+    #[arg(short, long, num_args = 1.., value_delimiter = ' ', value_hint = ValueHint::FilePath, value_parser = validate_readable_file)]
+    pub lists_file: Option<Vec<PathBuf>>,
+
     /// File containing a list of domains to dns block, multiple can be specified
     #[arg(short, long, num_args = 1.., value_delimiter = ' ', value_hint = ValueHint::FilePath, value_parser = validate_readable_file)]
     pub block_file: Option<Vec<PathBuf>>,
