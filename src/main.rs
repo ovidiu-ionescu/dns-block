@@ -11,7 +11,7 @@ mod cli;
 mod dns_resolver;
 mod list_of_lists;
 mod sub_domains;
-use sub_domains::{count_char_occurences, sub_domain_iterator, Domain};
+use sub_domains::{Domain, count_char_occurences, sub_domain_iterator};
 mod filter;
 mod statistics;
 use statistics::Statistics;
@@ -47,14 +47,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let start = Instant::now();
 
-    let remote_lists = fetch_lists(command_line_params.lists_file).await;
+    debug!("resolve the remote lists");
+    let remote_lists = fetch_lists(command_line_params.lists_file).await?;
 
     let whitelist_string = match command_line_params.allow_file {
-      Some(path) => fs::read_to_string(path).unwrap(),
-      _ => String::with_capacity(0),
+        Some(path) => fs::read_to_string(path).unwrap(),
+        _ => String::with_capacity(0),
     };
 
-    debug!("Do the DNS requests for whitelisted domains while we read and sort the domains we want to block");
+    debug!(
+        "Do the DNS requests for whitelisted domains while we read and sort the domains we want to block"
+    );
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
         tx.send(expand_whitelist(whitelist_string)).unwrap();
@@ -66,48 +69,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let start_sorting = start.elapsed().as_millis();
 
     // read the block files from disk
-    // also calculate max number of lines
+    // also calculate number of lines
     let mut total_line_count = 0;
     let block_lists = match command_line_params.block_file {
-      Some(block_files) =>
-      block_files.iter().map(|path| {
-        let mut text = read_to_string(path).unwrap();
-        // converting to lowercase might generate some duplicates
-        text.make_ascii_lowercase();
-        total_line_count += count_char_occurences(&text, '\n');
-        text
-      }).collect(),
-      _ => Vec::new(),
+        Some(block_files) => block_files
+            .iter()
+            .map(|path| {
+                let mut text = read_to_string(path).unwrap();
+                // converting to lowercase might generate some duplicates
+                text.make_ascii_lowercase();
+                total_line_count += count_char_occurences(&text, '\n');
+                text
+            })
+            .collect(),
+        _ => Vec::new(),
     };
 
-    // do the same for the lists of lists
+    debug!("count the lines in the list of lists");
+    remote_lists.iter().for_each(|fetch_result| {
+        if let Ok(text) = &fetch_result.text {
+            total_line_count += count_char_occurences(text, '\n');
+        }
+    });
+
+    debug!("add the local lists to stuff to block");
     let mut bad_domains = Vec::with_capacity(total_line_count);
     block_lists.iter().for_each(|text| {
-      for line in text.lines() {
-        if let Some(domain) = Domain::new(line) {
-            bad_domains.push(domain);
-        }
-      }
-    });
-
-    let remote_lists = remote_lists?;
-    remote_lists.iter().for_each(|fetch_result| {
-      if let Ok(text) = &fetch_result.text {
         for line in text.lines() {
-        if let Some(domain) = Domain::new(line) {
-            bad_domains.push(domain);
+            if let Some(domain) = Domain::new(line) {
+                bad_domains.push(domain);
+            }
         }
-        
-        }
-      }
     });
 
-    // println!("sort the vector, less dots first");
+    debug!("add the remote lists to the stuff to block");
+    remote_lists.iter().for_each(|fetch_result| {
+        if let Ok(text) = &fetch_result.text {
+            for line in text.lines() {
+                if let Some(domain) = Domain::new(line) {
+                    bad_domains.push(domain);
+                }
+            }
+        }
+    });
+
+    debug!("sort the vector, less dots first");
     let start_sorting_code = start.elapsed().as_millis();
     bad_domains.sort_unstable_by_key(|d: &Domain| d.dots);
     let end_sorting = start.elapsed().as_millis();
 
-    // Prepare the whitelist index
+    debug!("Prepare the whitelist index");
     // get the cnames from the other thread
     let (whitelist_string, cnames) = rx.recv().unwrap();
 

@@ -19,12 +19,11 @@ impl<'a> Domain<'a> {
         }
         .trim();
         if let Some(name) = comment_stripped.split_whitespace().next_back() {
-
             match parse_dns_name(name) {
                 Ok(_) => {}
                 Err(_) => {
-                  warn!("Invalid domain name: {}", name);
-                  return None;
+                    warn!("Invalid domain name: {}", name);
+                    return None;
                 }
             }
             let dots = count_char_occurences(name, '.');

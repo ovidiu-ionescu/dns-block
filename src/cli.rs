@@ -33,7 +33,7 @@ pub enum Commands {
     Pack {
         /// output in Bind9 format
         #[arg(short, long)]
-        bind:        bool,
+        bind: bool,
         /// Output file
         #[arg(name = "output_file", default_value = "simple.blocked")]
         output_file: String,
@@ -52,10 +52,10 @@ pub fn get_args() -> Args {
 
 fn validate_readable_file(s: &str) -> Result<PathBuf, String> {
     let path = PathBuf::from(s);
-    
+
     // Check if path exists and is a file
     let meta = metadata(&path).map_err(|_| format!("'{}' does not exist", s))?;
-    
+
     if !meta.is_file() {
         return Err(format!("'{}' is not a file", s));
     }
