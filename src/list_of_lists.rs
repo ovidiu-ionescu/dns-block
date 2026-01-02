@@ -43,7 +43,7 @@ pub async fn fetch_lists(lists_file: Option<Vec<PathBuf>>) -> Result<Vec<FetchRe
       Ok::<HashSet<String>, BoxError>(acc)
     })?;
 
-  let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
+  let retry_policy = ExponentialBackoff::builder().build_with_max_retries(10);
   let client = ClientBuilder::new(Client::new()).with(RetryTransientMiddleware::new_with_policy(retry_policy)).build();
 
   // 1. Create a list of futures (one for each request)
